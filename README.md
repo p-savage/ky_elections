@@ -1,0 +1,1 @@
+In-progress rewrite of a pipeline that extracts, parses, and stores Kentucky election result files.
