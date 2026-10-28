@@ -14,10 +14,7 @@ MANIFEST_FIELDNAMES = [
 ]
 ROOT_URL = 'https://elect.ky.gov/results/Pages/default.aspx'
 HEADER = {
-    'User-Agent': 
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) '
-    'AppleWebKit/605.1.15 (KHTML, like Gecko) '
-    'Version/18.6 Safari/605.1.15'
+    'User-Agent': 'ky-elections-etl/0.1 (pjslouisville502@gmail.com)'
     }
 TIMEOUT = 10.00
 MAX_TRIES = 5
