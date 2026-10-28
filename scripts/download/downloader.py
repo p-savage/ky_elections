@@ -138,8 +138,8 @@ def validate_queue_path(download_queue_path: Path) -> bool:
     Validates the file path specified in config.
 
     Run downloader only after successful validation and reconciliation of
-    artifacts created by the last file_finder run to avoid validation 
-    failure.
+    artifacts created by the last static_file_finder run to avoid
+    validation failure.
     """
 
     if download_queue_path.exists() and download_queue_path.is_file():
