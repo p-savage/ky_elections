@@ -41,20 +41,20 @@ data = '<Request xmlns="http://schemas.microsoft.com/sharepoint/clientquery/2009
 def main() -> None:
 
     s = requests.Session()
-    response = s.get(url=first_url, headers=first_header, timeout=TIMEOUT)
-    html_str = response.text
+    get_response = s.get(url=first_url, headers=first_header, timeout=TIMEOUT)
+    html_str = get_response.text
     try:
         digest = extract_digest(html_str=html_str)
     except DigestExtractionError as e:
         sys.exit(str(e))
     complete_second_header = second_header | {'X-RequestDigest' : digest}
-    response = s.post(url=second_url,headers=complete_second_header,data=data,timeout=TIMEOUT)
-    if response.status_code == 200:
-        parsed = response.json()
+    post_response = s.post(url=second_url,headers=complete_second_header,data=data,timeout=TIMEOUT)
+    if post_response.status_code == 200:
+        parsed = post_response.json()
         formatted = json.dumps(parsed,indent=4)
         print(formatted)
     else:
-        print(response.status_code)
+        print(post_response.status_code)
 
 if __name__ == "__main__":
     main()
