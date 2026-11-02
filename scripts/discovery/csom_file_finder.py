@@ -11,20 +11,20 @@ from scripts.environment.config import TIMEOUT
 class DigestExtractionError(Exception):
     def __init__(self, count: int) -> None:
         self.count = count
-        super().__init__(f"{self.count} digests found.")
+        super().__init__(f"{self.count} distinct digests found.")
         
 def extract_digest(html_str: str) -> str:
 
     html = BeautifulSoup(html_str, 'html.parser')
     pattern = re.compile(r"formDigestElement\.value = '([^']+)'")
     script_tags = html.find_all('script')
-    digests = []
+    digests = set()
     for tag in script_tags:
-        match = pattern.search(tag.text)
-        if match is not None:
-            digests.append(match.group(1))
+        match_iterator = pattern.finditer(tag.text)
+        for match in match_iterator:
+            digests.add(match.group(1))
     if len(digests) == 1:
-        return digests[0]
+        return next(iter(digests))
     else:
         raise DigestExtractionError(count=len(digests))
 
