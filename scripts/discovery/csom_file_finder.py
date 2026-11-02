@@ -42,6 +42,8 @@ def main() -> None:
 
     s = requests.Session()
     get_response = s.get(url=first_url, headers=first_header, timeout=TIMEOUT)
+    if get_response.status_code != 200:
+        sys.exit(f"GET response status code: {get_response.status_code}")
     html_str = get_response.text
     try:
         digest = extract_digest(html_str=html_str)
@@ -49,12 +51,11 @@ def main() -> None:
         sys.exit(str(e))
     complete_second_header = second_header | {'X-RequestDigest' : digest}
     post_response = s.post(url=second_url,headers=complete_second_header,data=data,timeout=TIMEOUT)
-    if post_response.status_code == 200:
-        parsed = post_response.json()
-        formatted = json.dumps(parsed,indent=4)
-        print(formatted)
-    else:
-        print(post_response.status_code)
+    if post_response.status_code != 200:
+        sys.exit(f"POST response status code: {post_response.status_code}")
+    parsed = post_response.json()
+    formatted = json.dumps(parsed,indent=4)
+    print(formatted)
 
 if __name__ == "__main__":
     main()
