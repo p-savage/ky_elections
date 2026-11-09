@@ -106,6 +106,24 @@ def form_request_body(
     '</Method></ObjectPaths></Request>')
     return body
 
+def retrieve_county_results(
+        session: requests.Session,
+        complete_header: dict[str,str],
+        data: str,
+        timeout: float,
+):
+
+    post_response = session.post(
+        url=second_url,
+        headers=complete_header,
+        data=data,
+        timeout=timeout,
+    )
+    if post_response.status_code != 200:
+        sys.exit(f"POST response status code: {post_response.status_code}")
+    parsed_json = post_response.json()
+    return parsed_json
+
 def compile_zip_urls(parsed_json: list, row_limit: int) -> list[str]:
     zip_urls = []
     for element in parsed_json:
@@ -120,8 +138,8 @@ def compile_zip_urls(parsed_json: list, row_limit: int) -> list[str]:
 
 def main() -> None:
 
-    s = requests.Session()
-    get_response = s.get(
+    session = requests.Session()
+    get_response = session.get(
         url=first_url,
         headers=first_header,
         timeout=TIMEOUT,
@@ -144,14 +162,12 @@ def main() -> None:
         county = county,
         row_limit = row_limit,
     )
-    post_response = s.post(
-        url=second_url,
-        headers=complete_second_header,
-        data=data,timeout=TIMEOUT,
+    parsed_json = retrieve_county_results(
+        session=session,
+        complete_header=complete_second_header,
+        data=data,
+        timeout=TIMEOUT,
     )
-    if post_response.status_code != 200:
-        sys.exit(f"POST response status code: {post_response.status_code}")
-    parsed_json = post_response.json()
     zip_urls = compile_zip_urls(
         parsed_json=parsed_json,
         row_limit=row_limit,
