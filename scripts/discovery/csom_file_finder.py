@@ -152,30 +152,31 @@ def main() -> None:
         sys.exit(str(e))
     complete_second_header = second_header | {'X-RequestDigest' : digest}
     election_year = 2011
-    election_type = 'General'
+    election_types = ['General', 'Primary',]
     counties = ['Caldwell', 'LaRue',]
     request_queue = counties.copy()
     request_queue.append('Statewide')
     row_limit = ROW_LIMIT
     for folder in request_queue:
-        data = form_request_body(
-            election_year = election_year,
-            election_type = election_type,
-            folder = folder,
-            row_limit = row_limit,
-        )
-        parsed_json = post_process_query(
-            session=session,
-            complete_header=complete_second_header,
-            data=data,
-            timeout=TIMEOUT,
-        )
-        zip_urls = compile_zip_urls(
-            parsed_json=parsed_json,
-            row_limit=row_limit,
-        )
-        for url in zip_urls[:6]:
-            print(url)
+        for election_type in election_types:
+            data = form_request_body(
+                election_year = election_year,
+                election_type = election_type,
+                folder = folder,
+                row_limit = row_limit,
+            )
+            parsed_json = post_process_query(
+                session=session,
+                complete_header=complete_second_header,
+                data=data,
+                timeout=TIMEOUT,
+            )
+            zip_urls = compile_zip_urls(
+                parsed_json=parsed_json,
+                row_limit=row_limit,
+            )
+            for url in zip_urls[:6]:
+                print(url)
 
 if __name__ == "__main__":
     main()
