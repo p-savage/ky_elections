@@ -12,6 +12,19 @@ class DigestExtractionError(Exception):
         self.count = count
         super().__init__(f"{self.count} distinct digests found.")
         
+def get_results_page(
+        session: requests.Session
+) -> str:
+
+    response = session.get(
+        url=first_url,
+        headers=first_header,
+        timeout=TIMEOUT,
+    )
+    if response.status_code != 200:
+        sys.exit(f"GET response status code: {response.status_code}")
+    return response.text
+
 def extract_digest(html_str: str) -> str:
 
     html = BeautifulSoup(html_str, 'html.parser')
@@ -138,14 +151,7 @@ def compile_zip_urls(parsed_json: list, row_limit: int) -> list[str]:
 def main() -> None:
 
     session = requests.Session()
-    get_response = session.get(
-        url=first_url,
-        headers=first_header,
-        timeout=TIMEOUT,
-    )
-    if get_response.status_code != 200:
-        sys.exit(f"GET response status code: {get_response.status_code}")
-    html_str = get_response.text
+    html_str = get_results_page(session=session)
     try:
         digest = extract_digest(html_str=html_str)
     except DigestExtractionError as e:
