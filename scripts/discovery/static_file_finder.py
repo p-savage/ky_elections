@@ -236,7 +236,12 @@ def main() -> None:
             crawl_log_session,
             fieldnames=crawl_log_fieldnames,
         )
-        file_inv_fieldnames = ['file_type', 'file_url', 'source_url']
+        file_inv_fieldnames = [
+            'file_type',
+            'file_url',
+            'source_url',
+            'extraction_paradigm',
+        ]
         file_inv_writer = csv.DictWriter(
             file_inv_session,
             fieldnames=file_inv_fieldnames,
