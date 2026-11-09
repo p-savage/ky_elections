@@ -28,6 +28,7 @@ def extract_digest(html_str: str) -> str:
         raise DigestExtractionError(count=len(digests))
 
 URL_STEM = 'https://elect.ky.gov'
+ROW_LIMIT = 30
 first_url = (
     'https://elect.ky.gov/results/2010-2019/Pages/'
     '2011primaryandgeneralelectionresults.aspx'
@@ -46,7 +47,7 @@ second_header = {
 def form_request_body(
         election_year: int,
         election_type: str,
-        county: str,
+        folder: str,
         row_limit: int,
 ) -> str:
     if 2010 <= election_year <= 2019:
@@ -55,7 +56,7 @@ def form_request_body(
         decade = '2020-2029'
     server_relative_path = (
         f'/results/{decade}/{election_year}ElectionReports/'
-        f'{election_type}/{county.upper()}'
+        f'{election_type}/{folder.upper()}'
         )
     body = ('<Request '
     'xmlns="http://schemas.microsoft.com/sharepoint/clientquery/2009" '
@@ -92,26 +93,24 @@ def form_request_body(
     '<Property Name="FolderServerRelativeUrl" Type="Null" />'
     '<Property Name="ListItemCollectionPosition" Type="Null" />'
     '<Property Name="ViewXml" Type="String">'
-    '&lt;View Scope="Recursive"&gt;&lt;Query&gt;&lt;Where&gt;&lt;Or'
-    '&gt;&lt;Contains&gt;&lt;FieldRef Name="FileDirRef" /&gt;&lt;'
-    'Value Type="Text"&gt;'f'{election_type}''/Statewide&lt;/Value'
-    '&gt;&lt;/Contains&gt;&lt;Eq&gt;&lt;FieldRef Name="FileDirRef"'
-    ' /&gt;&lt;Value Type="Text"&gt;'f'{server_relative_path}''&lt;/'
-    'Value&gt;&lt;/Eq&gt;&lt;/Or&gt;&lt;/Where&gt;&lt;OrderBy'
-    '&gt;&lt;FieldRef Name="FileDirRef" Ascending="True" /&gt;&lt;'
-    'FieldRef Name="FileLeafRef" Ascending="False" /&gt;&lt;/OrderBy'
-    '&gt;&lt;/Query&gt;&lt;RowLimit&gt;'f'{row_limit}''&lt;/RowLimit'
-    '&gt;&lt;/View&gt;'
+    '&lt;View Scope="Recursive"&gt;&lt;Query&gt;&lt;Where&gt;'
+    '&lt;Eq&gt;&lt;FieldRef Name="FileDirRef" /&gt;'
+    '&lt;Value Type="Text"&gt;'f'{server_relative_path}''&lt;/Value&gt;'
+    '&lt;/Eq&gt;&lt;/Where&gt;'
+    '&lt;OrderBy&gt;&lt;FieldRef Name="FileDirRef" Ascending="True" /&gt;'
+    '&lt;FieldRef Name="FileLeafRef" Ascending="False" /&gt;&lt;/OrderBy&gt;'
+    '&lt;/Query&gt;&lt;RowLimit&gt;'f'{row_limit}''&lt;/RowLimit&gt;'
+    '&lt;/View&gt;'
     '</Property></Parameter></Parameters>'
     '</Method></ObjectPaths></Request>')
     return body
 
-def retrieve_county_results(
+def post_process_query(
         session: requests.Session,
         complete_header: dict[str,str],
         data: str,
         timeout: float,
-):
+) -> list:
 
     post_response = session.post(
         url=second_url,
@@ -154,26 +153,29 @@ def main() -> None:
     complete_second_header = second_header | {'X-RequestDigest' : digest}
     election_year = 2011
     election_type = 'General'
-    county = 'Caldwell'
-    row_limit = 30
-    data = form_request_body(
-        election_year = election_year,
-        election_type = election_type,
-        county = county,
-        row_limit = row_limit,
-    )
-    parsed_json = retrieve_county_results(
-        session=session,
-        complete_header=complete_second_header,
-        data=data,
-        timeout=TIMEOUT,
-    )
-    zip_urls = compile_zip_urls(
-        parsed_json=parsed_json,
-        row_limit=row_limit,
-    )
-    for url in zip_urls[:6]:
-        print(url)
+    counties = ['Caldwell', 'LaRue',]
+    request_queue = counties.copy()
+    request_queue.append('Statewide')
+    row_limit = ROW_LIMIT
+    for folder in request_queue:
+        data = form_request_body(
+            election_year = election_year,
+            election_type = election_type,
+            folder = folder,
+            row_limit = row_limit,
+        )
+        parsed_json = post_process_query(
+            session=session,
+            complete_header=complete_second_header,
+            data=data,
+            timeout=TIMEOUT,
+        )
+        zip_urls = compile_zip_urls(
+            parsed_json=parsed_json,
+            row_limit=row_limit,
+        )
+        for url in zip_urls[:6]:
+            print(url)
 
 if __name__ == "__main__":
     main()
