@@ -18,6 +18,14 @@ HEADER = {
     }
 TIMEOUT = 10.00
 MAX_TRIES = 5
+RETRY_STATUS_CODES = [
+    408,
+    429,
+    500,
+    502,
+    503,
+    504,
+]
 SUPPORTED_FILE_TYPES = [
     'pdf', 'txt', 'csv',
     'xls', 'xlsx', 'xml',

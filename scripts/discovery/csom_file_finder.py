@@ -1,28 +1,87 @@
 import re
 import sys
+import time
 
 import requests
 from bs4 import BeautifulSoup
 
-from scripts.environment.config import TIMEOUT
+from scripts.environment.config import (
+    MAX_TRIES,
+    RETRY_STATUS_CODES,
+    SLEEP_TIME,
+    TIMEOUT,
+)
 
 
 class DigestExtractionError(Exception):
     def __init__(self, count: int) -> None:
         self.count = count
         super().__init__(f"{self.count} distinct digests found.")
-        
+
+ELECTION_YEAR = 2011
+URL_STEM = 'https://elect.ky.gov'
+ROW_LIMIT = 30
+FIRST_URL = (
+    'https://elect.ky.gov/results/2010-2019/Pages/'
+    '2011primaryandgeneralelectionresults.aspx'
+)
+FIRST_HEADER = {
+    'User-Agent':'ky-elections-etl/0.1 (pjslouisville502@gmail.com)'
+}
+SECOND_URL = (
+    'https://elect.ky.gov/results/2010-2019/_vti_bin/client.svc/ProcessQuery'
+)
+SECOND_HEADER = {
+    'User-Agent':'ky-elections-etl/0.1 (pjslouisville502@gmail.com)',
+    'Content-Type':'text/xml',
+    'X-Requested-With':'XMLHttpRequest',
+}
+
 def get_results_page(
-        session: requests.Session
+        session: requests.Session,
+        election_year: int,
 ) -> str:
 
-    response = session.get(
-        url=first_url,
-        headers=first_header,
-        timeout=TIMEOUT,
-    )
-    if response.status_code != 200:
-        sys.exit(f"GET response status code: {response.status_code}")
+    for _ in range(MAX_TRIES):
+        try:
+            response = session.get(
+                url=FIRST_URL,
+                headers=FIRST_HEADER,
+                timeout=TIMEOUT,
+            )
+        except (
+            requests.exceptions.SSLError,
+            requests.exceptions.ProxyError,
+            requests.exceptions.TooManyRedirects,
+            requests.exceptions.MissingSchema,
+            requests.exceptions.InvalidSchema,
+            requests.exceptions.InvalidURL,
+            requests.exceptions.ContentDecodingError,
+            ) as fatal:
+            sys.exit(f"{type(fatal).__name__} for {election_year} page.")
+        except(
+            requests.exceptions.Timeout,
+            requests.exceptions.ChunkedEncodingError,
+            requests.exceptions.ConnectionError,
+        ):
+            time.sleep(SLEEP_TIME)
+            continue
+        except requests.exceptions.RequestException as catch_all:
+            sys.exit(
+                f"{type(catch_all).__name__} for "
+                f"{election_year} page.")
+        if response.status_code == 200:
+            break
+        elif response.status_code in RETRY_STATUS_CODES:
+            time.sleep(SLEEP_TIME)
+            continue
+        else:
+            sys.exit(
+                f"YEAR: {election_year} "
+                f"STATUS CODE: {response.status_code}"
+            )
+    else:
+        sys.exit(f"Max tries exceeded for {election_year} page.")
     return response.text
 
 def extract_digest(html_str: str) -> str:
@@ -40,23 +99,6 @@ def extract_digest(html_str: str) -> str:
     else:
         raise DigestExtractionError(count=len(digests))
 
-URL_STEM = 'https://elect.ky.gov'
-ROW_LIMIT = 30
-first_url = (
-    'https://elect.ky.gov/results/2010-2019/Pages/'
-    '2011primaryandgeneralelectionresults.aspx'
-)
-first_header = {
-    'User-Agent':'ky-elections-etl/0.1 (pjslouisville502@gmail.com)'
-}
-second_url = (
-    'https://elect.ky.gov/results/2010-2019/_vti_bin/client.svc/ProcessQuery'
-)
-second_header = {
-    'User-Agent':'ky-elections-etl/0.1 (pjslouisville502@gmail.com)',
-    'Content-Type':'text/xml',
-    'X-Requested-With':'XMLHttpRequest',
-}
 def form_request_body(
         election_year: int,
         election_type: str,
@@ -126,7 +168,7 @@ def post_process_query(
 ) -> list:
 
     post_response = session.post(
-        url=second_url,
+        url=SECOND_URL,
         headers=complete_header,
         data=data,
         timeout=timeout,
@@ -151,13 +193,12 @@ def compile_zip_urls(parsed_json: list, row_limit: int) -> list[str]:
 def main() -> None:
 
     session = requests.Session()
-    html_str = get_results_page(session=session)
+    html_str = get_results_page(session=session, election_year=ELECTION_YEAR)
     try:
         digest = extract_digest(html_str=html_str)
     except DigestExtractionError as e:
         sys.exit(str(e))
-    complete_second_header = second_header | {'X-RequestDigest' : digest}
-    election_year = 2011
+    complete_second_header = SECOND_HEADER | {'X-RequestDigest' : digest}
     election_types = ['General', 'Primary',]
     counties = ['Caldwell', 'LaRue',]
     request_queue = counties.copy()
@@ -166,7 +207,7 @@ def main() -> None:
     for folder in request_queue:
         for election_type in election_types:
             data = form_request_body(
-                election_year = election_year,
+                election_year = ELECTION_YEAR,
                 election_type = election_type,
                 folder = folder,
                 row_limit = row_limit,
