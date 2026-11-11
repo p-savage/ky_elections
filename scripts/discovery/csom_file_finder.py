@@ -36,6 +36,7 @@ SECOND_HEADER = {
     'Content-Type':'text/xml',
     'X-Requested-With':'XMLHttpRequest',
 }
+KY_COUNTY_COUNT = 120
 
 def get_results_page(
         session: requests.Session,
@@ -98,6 +99,31 @@ def extract_digest(html_str: str) -> str:
         return next(iter(digests))
     else:
         raise DigestExtractionError(count=len(digests))
+
+def extract_county_list(html_str: str) -> list[str]:
+
+    html = BeautifulSoup(html_str,'html.parser')
+    general_dd_list = html.find_all('select', id='ddCountyGeneral')
+    if len(general_dd_list) != 1:
+        sys.exit("MULTIPLE GENERAL TAGS FOUND")
+    primary_dd_list = html.find_all('select', id='ddCountyPrimary')
+    if len(primary_dd_list) != 1:
+        sys.exit("MULTIPLE PRIMARY TAGS FOUND")
+    general_option_tags = general_dd_list[0].find_all('option')
+    primary_option_tags = primary_dd_list[0].find_all('option')
+    if (general_option_tags == primary_option_tags
+        and len(general_option_tags) == KY_COUNTY_COUNT):
+        counties = []
+        for tag in general_option_tags:
+            counties.append(tag.text)
+    else:
+        sys.exit(
+            "UNEXPECTED DD MENU OPTIONS SHAPE\n"
+            f"Expected county count: {KY_COUNTY_COUNT}\n"
+            f"No. of General Options: {len(general_option_tags)}\n"
+            f"No. of Primary Options: {len(primary_option_tags)}"
+        )
+    return counties
 
 def form_request_body(
         election_year: int,
@@ -198,9 +224,9 @@ def main() -> None:
         digest = extract_digest(html_str=html_str)
     except DigestExtractionError as e:
         sys.exit(str(e))
+    counties = extract_county_list(html_str=html_str)
     complete_second_header = SECOND_HEADER | {'X-RequestDigest' : digest}
     election_types = ['General', 'Primary',]
-    counties = ['Caldwell', 'LaRue',]
     request_queue = counties.copy()
     request_queue.append('Statewide')
     row_limit = ROW_LIMIT
@@ -222,8 +248,9 @@ def main() -> None:
                 parsed_json=parsed_json,
                 row_limit=row_limit,
             )
-            for url in zip_urls[:6]:
+            for url in zip_urls:
                 print(url)
+            time.sleep(SLEEP_TIME)
 
 if __name__ == "__main__":
     main()
