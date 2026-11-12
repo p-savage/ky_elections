@@ -18,6 +18,18 @@ class DigestExtractionError(Exception):
         self.count = count
         super().__init__(f"{self.count} distinct digests found.")
 
+class PostRequestError(Exception):
+    def __init__(
+            self,
+            exception: Exception | None,
+            status_code: int | None,
+            message: str,
+        ) -> None:
+        self.exception = exception
+        self.status_code = status_code
+        self.message = message
+        super().__init__(f"{self.message}")
+
 ELECTION_YEAR = 2011
 URL_STEM = 'https://elect.ky.gov'
 ROW_LIMIT = 30
@@ -50,7 +62,7 @@ def get_results_page(
                 headers=FIRST_HEADER,
                 timeout=TIMEOUT,
             )
-        except (
+        except(
             requests.exceptions.SSLError,
             requests.exceptions.ProxyError,
             requests.exceptions.TooManyRedirects,
@@ -58,7 +70,7 @@ def get_results_page(
             requests.exceptions.InvalidSchema,
             requests.exceptions.InvalidURL,
             requests.exceptions.ContentDecodingError,
-            ) as fatal:
+        ) as fatal:
             sys.exit(f"{type(fatal).__name__} for {election_year} page.")
         except(
             requests.exceptions.Timeout,
@@ -193,14 +205,58 @@ def post_process_query(
         timeout: float,
 ) -> list:
 
-    post_response = session.post(
-        url=SECOND_URL,
-        headers=complete_header,
-        data=data,
-        timeout=timeout,
-    )
-    if post_response.status_code != 200:
-        sys.exit(f"POST response status code: {post_response.status_code}")
+    for _ in range(MAX_TRIES):
+        try:
+            post_response = session.post(
+                url=SECOND_URL,
+                headers=complete_header,
+                data=data,
+                timeout=timeout,
+            )
+        except(
+            requests.exceptions.SSLError,
+            requests.exceptions.ProxyError,
+            requests.exceptions.TooManyRedirects,
+            requests.exceptions.MissingSchema,
+            requests.exceptions.InvalidSchema,
+            requests.exceptions.InvalidURL,
+            requests.exceptions.ContentDecodingError,
+        ) as fatal:
+            raise PostRequestError(
+                exception=fatal,
+                status_code=None,
+                message=f"{type(fatal).__name__}"
+            )    
+        except(
+            requests.exceptions.Timeout,
+            requests.exceptions.ChunkedEncodingError,
+            requests.exceptions.ConnectionError,
+        ):
+            time.sleep(SLEEP_TIME)
+            continue
+        except requests.exceptions.RequestException as catch_all:
+            raise PostRequestError(
+                exception=catch_all,
+                status_code=None,
+                message=f"{type(catch_all).__name__}"
+            )
+        if post_response.status_code == 200:
+            break
+        elif post_response.status_code in RETRY_STATUS_CODES:
+            time.sleep(SLEEP_TIME)
+            continue
+        else:
+            raise PostRequestError(
+                exception=None,
+                status_code=post_response.status_code,
+                message="Fatal status code",
+            )
+    else:
+        raise PostRequestError(
+            exception=None,
+            status_code=None,
+            message="Max retries exceeded."
+        )
     parsed_json = post_response.json()
     return parsed_json
 
@@ -238,12 +294,22 @@ def main() -> None:
                 folder = folder,
                 row_limit = row_limit,
             )
-            parsed_json = post_process_query(
-                session=session,
-                complete_header=complete_second_header,
-                data=data,
-                timeout=TIMEOUT,
-            )
+            try:
+                parsed_json = post_process_query(
+                    session=session,
+                    complete_header=complete_second_header,
+                    data=data,
+                    timeout=TIMEOUT,
+                )
+            except PostRequestError as post_error:
+                print(
+                    f"{folder}/{election_type}:\n"
+                    f"{post_error.exception}\n"
+                    f"{post_error.status_code}\n"
+                    f"{post_error.message}"
+                    )
+                time.sleep(SLEEP_TIME)
+                continue
             zip_urls = compile_zip_urls(
                 parsed_json=parsed_json,
                 row_limit=row_limit,
