@@ -49,6 +49,20 @@ SECOND_HEADER = {
     'X-Requested-With':'XMLHttpRequest',
 }
 KY_COUNTY_COUNT = 120
+FATAL_REQUEST_EXCEPTIONS = ( #MUST BE FIRST EXCEPT CLAUSE
+    requests.exceptions.SSLError, #subclass of ConnectionError
+    requests.exceptions.ProxyError, #subclass of ConnecttionError
+    requests.exceptions.TooManyRedirects,
+    requests.exceptions.MissingSchema,
+    requests.exceptions.InvalidSchema,
+    requests.exceptions.InvalidURL,
+    requests.exceptions.ContentDecodingError,
+) 
+TRANSIENT_REQUEST_EXCEPTIONS = (
+    requests.exceptions.Timeout,
+    requests.exceptions.ChunkedEncodingError,
+    requests.exceptions.ConnectionError,
+)
 
 def get_results_page(
         session: requests.Session,
@@ -62,21 +76,9 @@ def get_results_page(
                 headers=FIRST_HEADER,
                 timeout=TIMEOUT,
             )
-        except(
-            requests.exceptions.SSLError,
-            requests.exceptions.ProxyError,
-            requests.exceptions.TooManyRedirects,
-            requests.exceptions.MissingSchema,
-            requests.exceptions.InvalidSchema,
-            requests.exceptions.InvalidURL,
-            requests.exceptions.ContentDecodingError,
-        ) as fatal:
+        except FATAL_REQUEST_EXCEPTIONS as fatal:
             sys.exit(f"{type(fatal).__name__} for {election_year} page.")
-        except(
-            requests.exceptions.Timeout,
-            requests.exceptions.ChunkedEncodingError,
-            requests.exceptions.ConnectionError,
-        ):
+        except TRANSIENT_REQUEST_EXCEPTIONS:
             time.sleep(SLEEP_TIME)
             continue
         except requests.exceptions.RequestException as catch_all:
@@ -213,25 +215,13 @@ def post_process_query(
                 data=data,
                 timeout=timeout,
             )
-        except(
-            requests.exceptions.SSLError,
-            requests.exceptions.ProxyError,
-            requests.exceptions.TooManyRedirects,
-            requests.exceptions.MissingSchema,
-            requests.exceptions.InvalidSchema,
-            requests.exceptions.InvalidURL,
-            requests.exceptions.ContentDecodingError,
-        ) as fatal:
+        except FATAL_REQUEST_EXCEPTIONS as fatal:
             raise PostRequestError(
                 exception=fatal,
                 status_code=None,
                 message=f"{type(fatal).__name__}"
             )    
-        except(
-            requests.exceptions.Timeout,
-            requests.exceptions.ChunkedEncodingError,
-            requests.exceptions.ConnectionError,
-        ):
+        except TRANSIENT_REQUEST_EXCEPTIONS:
             time.sleep(SLEEP_TIME)
             continue
         except requests.exceptions.RequestException as catch_all:
